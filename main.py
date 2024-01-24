@@ -3,6 +3,8 @@ from PySide6.QtCore import QDate, Qt
 from PySide6.QtGui import QAction, QIcon
 from ColoresConsola import Colores
 import base64
+from PySide6.QtWidgets import QPushButton
+from time import sleep
 
 class MainWindow(QMainWindow):
     """Ventana principal para el diario personal
@@ -33,25 +35,8 @@ class MainWindow(QMainWindow):
         widgetPrincipal.setLayout(self.layoutPrincipal)
         self.setCentralWidget(widgetPrincipal)
         
-        try:
-            with open("Anotacion.txt", "r") as archivo:
-                contenido = archivo.read().split(";")
-                for anotacion in contenido:
-                    if anotacion != "":
-                        # Se decodifica el texto de la anotación
-                        texto = base64.b64decode(anotacion.encode()).decode()
-                        titulo = texto.split("__")[1].split("//")[0]
-                        contenido = texto.split("__")[1].split("//")[1]
-                        fecha = texto.split("__")[0]
-                        
-                        # Se crea un label con el texto de la anotación para mostrarlo en la ventana principal
-                        labelAnotacion = QPushButton(f"{texto.split('__')[1].split('//')[0]}\n{fecha}")
-                        labelAnotacion.clicked.connect(lambda cabecera = titulo, texto = contenido: self.mostrarAnotacion(cabecera, texto))
-                        
-                        # Se crea un registro con la fecha de creación de la anotación
-                        self.layoutPrincipal.addWidget(labelAnotacion)
-        except:
-            pass
+        sleep(0.5)
+        self.actualizarAnotaciones()
         
     def crearAnotacion(self):
         """Crea una nueva anotación
@@ -83,7 +68,7 @@ class MainWindow(QMainWindow):
         nuevaAnotacion.exec()
         
         if nuevaAnotacion.accepted:
-            with open("Anotacion.txt", "a+") as archivo:
+            with open("Anotacion.dat", "a+") as archivo:
                 # Se crea un registro con la fecha de creación de la anotación
                 registro = f"Anotación creada el {QDate.currentDate().toString(Qt.ISODate)};"
                 # Se codifica el texto de la anotación en base64
@@ -92,22 +77,13 @@ class MainWindow(QMainWindow):
                 archivo.write(f"{base64.b64encode(texto.encode()).decode()};")
                 # Se realiza un Log de aviso de éxito
                 print(f"{Colores.VERDE}CONSOLA {Colores.RESET}: Anotación creada con éxito")
-                
-                # Aqui se desgloza el texto de la anotación para mostrarlo en la ventana principal
-                titulo = texto.split("__")[1].split("//")[0]
-                contenido = texto.split("__")[1].split("//")[1]
-                fecha = texto.split("__")[0]
-                
-                # Se crea un label con el texto de la anotación para mostrarlo en la ventana principal
-                anotacion = QPushButton(f"{texto.split('__')[1].split('//')[0]}\n{fecha}")
-                
-                anotacion.clicked.connect(lambda cabecera = titulo, texto = contenido: self.mostrarAnotacion(cabecera, texto))
-                
-                self.layoutPrincipal.addWidget(anotacion)
+                archivo.close()
+                self.actualizarAnotaciones()
                 
     def mostrarAnotacion(self, titulo, contenido):
         """Muestra la anotación seleccionada
         """
+        # Se realiza un Log de aviso de éxito
         print(f"{Colores.VERDE}CONSOLA {Colores.RESET}: Mostrando anotación")
         # Se crea el layout para mostrar la anotación
         layout = QVBoxLayout()
@@ -127,6 +103,59 @@ class MainWindow(QMainWindow):
         muestraAnotacion.setWindowTitle(titulo.text())
         muestraAnotacion.setLayout(layout)
         muestraAnotacion.exec()
+
+    def eliminarAnotacion(self, anotacion, contenido):
+        """Elimina una anotación
+        """
+        # Se elimina la anotación de la ventana principal para luego eliminarla del archivo
+        anotacion.deleteLater()
+        print(f"{Colores.VERDE}CONSOLA {Colores.RESET}: Anotación eliminada con éxito")
+        try:
+            with open("Anotacion.dat", "r") as archivo:
+                contenidoNuevo = archivo.read().replace(contenido, "")
+                archivo.close()
+            with open("Anotacion.dat", "w") as archivo:
+                archivo.write(contenidoNuevo)
+                archivo.close()
+        except:
+            pass
+        
+    def actualizarAnotaciones(self):
+        """Actualiza la lista de anotaciones
+        """
+        try:
+            # Se eliminan las anotaciones anteriores limpiando toda la ventana
+            while self.layoutPrincipal.count():
+                child = self.layoutPrincipal.takeAt(0)
+                if child.widget():
+                    child.widget().deleteLater()
+                    
+            # Se leen las anotaciones del archivo y se reconstruye la ventana completa
+            with open("Anotacion.dat", "r") as archivo:
+                contenido = archivo.read().split(";")
+                print(f"{Colores.AMARILLO}CONSOLA {Colores.RESET}: Anotaciones encontradas: {len(contenido)-1}. {contenido}")
+                for anotacion in contenido:
+                    # Se recorre el contenido del archivo y se crea un label por cada anotación para mostrarlo
+                    if anotacion != "":
+                        # Se decodifica el texto de la anotación
+                        texto = base64.b64decode(anotacion.encode()).decode()
+                        titulo = texto.split("__")[1].split("//")[0]
+                        contenido = texto.split("__")[1].split("//")[1]
+                        fecha = texto.split("__")[0]
+                        
+                        # Se crea un label con el texto de la anotación para mostrarlo en la ventana principal
+                        labelAnotacion = QPushButton(f"{texto.split('__')[1].split('//')[0]}\n{fecha}")
+                        labelAnotacion.clicked.connect(lambda cabecera = titulo, texto = contenido: self.mostrarAnotacion(cabecera, texto))
+                        
+                        botonBorrar = QPushButton("X", labelAnotacion)
+                        botonBorrar.setFlat(True)
+                        botonBorrar.clicked.connect(lambda bool="boleano", boton = labelAnotacion, contenido = anotacion: self.eliminarAnotacion(boton, f"{contenido};"))
+                        
+                        # Se crea un registro con la fecha de creación de la anotación
+                        self.layoutPrincipal.addWidget(labelAnotacion)
+                archivo.close()
+        except:
+            pass
 
 if __name__ == "__main__":
     app = QApplication([])
